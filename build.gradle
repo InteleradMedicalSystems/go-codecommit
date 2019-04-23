@@ -1,0 +1,104 @@
+/*
+ * Build and package the codecommit for Lambda execution.
+*/
+
+plugins {
+    id 'base'
+    id 'org.ajoberstar.reckon' version '0.8.0'
+    id 'org.ajoberstar.grgit' version '3.0.0'
+}
+
+reckon {
+    scopeFromProp()
+    stageFromProp('dev')
+
+}
+
+def bucket = 'bin.dev-cloudinfra.intelerad.com'
+// target OSs to build for
+def targets = ["linux", "darwin"]
+
+def getS3KeyPrefix() {
+    def prefix = project.findProperty("s3Prefix")
+    if ( version.getVersion().isFinal() ) {
+        if ( prefix != null )  {
+            throw new GradleException("'s3Prefix' cannot be specified in final stage")
+        }
+        return ""
+    }
+    prefix = prefix ?: "dev"
+    return prefix.replaceAll(~/^\/|\/$/, "") + "/"
+}
+
+void buildGo_steps(targets) {
+    def gitCommit = grgit.head().id
+    targets.eachWithIndex { target, idx ->
+        exec {
+            workingDir 'cmd/codecommit'
+            environment "GOOS", "${target}"
+            commandLine 'go', 'build', '-ldflags',
+                "-w -s -X main.Version=${project.version} -X main.GitCommit=${gitCommit}",
+                '-v', '-o', "${buildDir}/bin/codecommit-${target}-amd64"
+        }
+    }
+}
+
+void upload_steps(targets, bucket) {
+    targets.eachWithIndex { target, idx ->
+        exec {
+            environment "AWS_SDK_LOAD_CONFIG", "1"
+            commandLine "${project.rootDir}/uploader",
+             "${buildDir}/bin/codecommit-${target}-amd64",
+             bucket,
+             "/bin/codecommit/${getS3KeyPrefix()}${project.version}/codecommit-${target}-amd64"
+        }
+    }
+}
+
+task dep(type: Exec) {
+    commandLine 'dep', 'ensure', '-vendor-only'
+}
+
+task buildGo() {
+    dependsOn dep
+    doLast {
+        buildGo_steps(targets)
+    }
+}
+
+task checkGo(type: Exec) {
+    dependsOn dep
+    def testReport = file("${buildDir}/test-report.txt")
+    outputs.file testReport
+
+    doFirst {
+        standardOutput = new org.apache.tools.ant.util.TeeOutputStream(
+            new FileOutputStream(testReport, false), System.out);
+    }
+
+
+    commandLine 'go', 'test', '-timeout', '20m', '-v',  './...'
+}
+
+task junitReportGo(type: Exec) {
+    dependsOn checkGo
+    def testReport = file("${buildDir}/test-report.xml")
+    outputs.file testReport
+
+    doFirst {
+        standardInput new FileInputStream("${buildDir}/test-report.txt")
+        standardOutput new FileOutputStream(testReport)
+    }
+
+    commandLine 'go-junit-report'
+}
+
+task upload() {
+    doLast {
+        upload_steps(targets, bucket)
+    }
+}
+
+build.dependsOn(buildGo)
+check.dependsOn(checkGo)
+upload.dependsOn(build)

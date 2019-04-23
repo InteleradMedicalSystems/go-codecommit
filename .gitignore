@@ -1,0 +1,15 @@
+terraform.tfstate
+terraform.tfstate.backup
+.terraform
+build
+*.sw[op]
+*.py[co]
+.vscode
+*.zip
+.gradle
+test-report.txt
+test-report.xml
+cw.js
+.plugin-cache
+tests/Test*
+*.orig
