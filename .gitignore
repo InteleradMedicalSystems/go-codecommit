@@ -13,3 +13,4 @@ cw.js
 .plugin-cache
 tests/Test*
 *.orig
+cmd/codecommit/codecommit
