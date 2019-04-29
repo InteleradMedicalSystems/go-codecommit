@@ -9,8 +9,8 @@ import (
 	"text/template"
 
 	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/bashims/go-codecommit/pkg/codecommit"
 	"github.com/spf13/cobra"
-	"rnd-bitbucket.intelerad.com/scm/ci/go-codecommit/pkg/codecommit"
 )
 
 const (
