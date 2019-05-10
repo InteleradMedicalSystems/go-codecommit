@@ -13,4 +13,5 @@ cw.js
 .plugin-cache
 tests/Test*
 *.orig
-cmd/codecommit/codecommit
+gradle*
+build.gradle
