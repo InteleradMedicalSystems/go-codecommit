@@ -7,7 +7,6 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 
@@ -44,7 +43,7 @@ func TestCredentialHelper(t *testing.T) {
 	t.Parallel()
 	e := NewCredentialHelperE2ETest(t, TestOptions{
 		srcdir: "terraform",
-		region: "ca-central-1",
+		region: "us-east-1",
 	})
 	e.testCredentialHelperClone()
 }
@@ -100,8 +99,8 @@ func (e *CredentialHelperTest) testCredentialHelperClone() {
 }
 
 func (e *CredentialHelperTest) helperExe() string {
-	return path.Join(cwd, "../build/bin",
-		fmt.Sprintf("codecommit-%s-%s", runtime.GOOS, runtime.GOARCH))
+	return path.Join(cwd, "../build/codecommit")
+	//fmt.Sprintf("codecommit-%s-%s", runtime.GOOS, runtime.GOARCH))
 }
 
 func (e *CredentialHelperTest) assertOutputs(opts *terraform.Options) {
@@ -148,7 +147,7 @@ func NewCredentialHelperE2ETest(t *testing.T, topts TestOptions) *CredentialHelp
 	return &CredentialHelperTest{
 		t:           t,
 		topts:       topts,
-		project:     "terratest",
+		project:     "go-codecommit",
 		environment: getEnvironment(),
 	}
 }
