@@ -54,7 +54,6 @@ type CredentialHelperTest struct {
 	uniqueid             string
 	project              string
 	environment          string
-	bucketHandlerVersion string
 	tempdir              string
 	root                 string
 }
