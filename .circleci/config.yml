@@ -6,7 +6,7 @@ jobs:
   build:
     docker:
       # specify the version
-      - image: circleci/golang:1.12
+      - image: circleci/golang:1.14
 
       # Specify service dependencies here if necessary
       # CircleCI maintains a library of pre-built images
@@ -20,10 +20,14 @@ jobs:
     working_directory: /go/src/github.com/bashims/go-codecommit
     steps:
       - checkout
+      - setup_remote_docker:
 
       # specify any bash command here prefixed with `run: `
       - run: git config --global user.email go-codecommit@cci.com
       - run: git config --global user.name go-codecommit-cci
-      - run: curl -f --location https://releases.hashicorp.com/terraform/0.11.13/terraform_0.11.13_linux_amd64.zip -o /tmp/terraform.zip && unzip -o /tmp/terraform.zip -d $GOPATH/bin
+      - run: curl -f --location https://releases.hashicorp.com/terraform/0.12.27/terraform_0.12.27_linux_amd64.zip -o /tmp/terraform.zip && unzip -o /tmp/terraform.zip -d $GOPATH/bin
       - run: make build
       - run: make test
+      - run: |
+          echo "$DOCKER_PASS" | docker login -u $DOCKER_USER --password-stdin
+          make build-docker push-docker

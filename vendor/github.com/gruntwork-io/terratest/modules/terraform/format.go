@@ -3,24 +3,59 @@ package terraform
 import (
 	"fmt"
 	"reflect"
+	"strconv"
 	"strings"
+
+	"github.com/gruntwork-io/terratest/modules/collections"
 )
+
+// TerraformDefaultLockingStatus - The terratest default command lock status (backwards compatibility)
+var TerraformCommandsWithLockSupport = []string{
+	"plan",
+	"apply",
+	"destroy",
+	"init",
+	"refresh",
+	"taint",
+	"untaint",
+	"import",
+}
 
 // FormatArgs converts the inputs to a format palatable to terraform. This includes converting the given vars to the
 // format the Terraform CLI expects (-var key=value).
 func FormatArgs(options *Options, args ...string) []string {
 	var terraformArgs []string
+	commandType := args[0]
+	lockSupported := collections.ListContains(TerraformCommandsWithLockSupport, commandType)
+
 	terraformArgs = append(terraformArgs, args...)
 	terraformArgs = append(terraformArgs, FormatTerraformVarsAsArgs(options.Vars)...)
 	terraformArgs = append(terraformArgs, FormatTerraformArgs("-var-file", options.VarFiles)...)
 	terraformArgs = append(terraformArgs, FormatTerraformArgs("-target", options.Targets)...)
+
+	if lockSupported {
+		// If command supports locking, handle lock arguments
+		terraformArgs = append(terraformArgs, FormatTerraformLockAsArgs(options.Lock, options.LockTimeout)...)
+	}
+
 	return terraformArgs
 }
 
 // FormatTerraformVarsAsArgs formats the given variables as command-line args for Terraform (e.g. of the format
 // -var key=value).
 func FormatTerraformVarsAsArgs(vars map[string]interface{}) []string {
-	return formatTerraformArgs(vars, "-var")
+	return formatTerraformArgs(vars, "-var", true)
+}
+
+// FormatTerraformLockAsArgs formats the lock and lock-timeout variables
+// -lock, -lock-timeout
+func FormatTerraformLockAsArgs(lockCheck bool, lockTimeout string) []string {
+	lockArgs := []string{fmt.Sprintf("-lock=%v", lockCheck)}
+	if lockTimeout != "" {
+		lockTimeoutValue := fmt.Sprintf("%s=%s", "-lock-timeout", lockTimeout)
+		lockArgs = append(lockArgs, lockTimeoutValue)
+	}
+	return lockArgs
 }
 
 // FormatTerraformArgs will format multiple args with the arg name (e.g. "-var-file", []string{"foo.tfvars", "bar.tfvars"})
@@ -34,19 +69,25 @@ func FormatTerraformArgs(argName string, args []string) []string {
 }
 
 // FormatTerraformBackendConfigAsArgs formats the given variables as backend config args for Terraform (e.g. of the
-// format -backend-config key=value).
+// format -backend-config=key=value).
 func FormatTerraformBackendConfigAsArgs(vars map[string]interface{}) []string {
-	return formatTerraformArgs(vars, "-backend-config")
+	return formatTerraformArgs(vars, "-backend-config", false)
 }
 
-// Format the given vars into 'Terraform' format, with each var being prefixed with the given prefix.
-func formatTerraformArgs(vars map[string]interface{}, prefix string) []string {
+// Format the given vars into 'Terraform' format, with each var being prefixed with the given prefix. If
+// useSpaceAsSeparator is true, a space will separate the prefix and each var (e.g., -var foo=bar). If
+// useSpaceAsSeparator is false, an equals will separate the prefix and each var (e.g., -backend-config=foo=bar).
+func formatTerraformArgs(vars map[string]interface{}, prefix string, useSpaceAsSeparator bool) []string {
 	var args []string
 
 	for key, value := range vars {
-		hclString := toHclString(value)
+		hclString := toHclString(value, false)
 		argValue := fmt.Sprintf("%s=%s", key, hclString)
-		args = append(args, prefix, argValue)
+		if useSpaceAsSeparator {
+			args = append(args, prefix, argValue)
+		} else {
+			args = append(args, fmt.Sprintf("%s=%s", prefix, argValue))
+		}
 	}
 
 	return args
@@ -57,7 +98,7 @@ func formatTerraformArgs(vars map[string]interface{}, prefix string) []string {
 // arbitrary Go types to an HCL string. Therefore, this method is a simple implementation that correctly handles
 // ints, booleans, lists, and maps. Everything else is forced into a string using Sprintf. Hopefully, this approach is
 // good enough for the type of variables we deal with in Terratest.
-func toHclString(value interface{}) string {
+func toHclString(value interface{}, isNested bool) string {
 	// Ideally, we'd use a type switch here to identify slices and maps, but we can't do that, because Go doesn't
 	// support generics, and the type switch only matches concrete types. So we could match []interface{}, but if
 	// a user passes in []string{}, that would NOT match (the same logic applies to maps). Therefore, we have to
@@ -68,7 +109,7 @@ func toHclString(value interface{}) string {
 	} else if m, isMap := tryToConvertToGenericMap(value); isMap {
 		return mapToHclString(m)
 	} else {
-		return primitiveToHclString(value)
+		return primitiveToHclString(value, isNested)
 	}
 }
 
@@ -119,7 +160,7 @@ func sliceToHclString(slice []interface{}) string {
 	hclValues := []string{}
 
 	for _, value := range slice {
-		hclValue := toHclString(value)
+		hclValue := toHclString(value, true)
 		hclValues = append(hclValues, hclValue)
 	}
 
@@ -131,7 +172,7 @@ func mapToHclString(m map[string]interface{}) string {
 	keyValuePairs := []string{}
 
 	for key, value := range m {
-		keyValuePair := fmt.Sprintf("%s = %s", key, toHclString(value))
+		keyValuePair := fmt.Sprintf(`"%s" = %s`, key, toHclString(value, true))
 		keyValuePairs = append(keyValuePairs, keyValuePair)
 	}
 
@@ -140,23 +181,25 @@ func mapToHclString(m map[string]interface{}) string {
 
 // Convert a primitive, such as a bool, int, or string, to an HCL string. If this isn't a primitive, force its value
 // using Sprintf. See ToHclString for details.
-func primitiveToHclString(value interface{}) string {
+func primitiveToHclString(value interface{}, isNested bool) string {
+	if value == nil {
+		return "null"
+	}
+
 	switch v := value.(type) {
 
-	// Terraform treats a boolean true as a 1 and a boolean false as a 0. It's best to convert to these ints when
-	// passing booleans as -var parameters. Moreover, due to a Terraform bug
-	// (https://github.com/hashicorp/terraform/issues/7962), all ints must be wrapped as strings.
 	case bool:
-		if v {
-			return "\"1\""
-		}
-		return "\"0\""
+		return strconv.FormatBool(v)
 
-	// Note: due to a Terraform bug (https://github.com/hashicorp/terraform/issues/7962), we can't use proper HCL
-	// syntax for ints have to wrap them as strings by falling through to the default case
-	//case int: return strconv.Itoa(v)
+	case string:
+		// If string is nested in a larger data structure (e.g. list of string, map of string), ensure value is quoted
+		if isNested {
+			return fmt.Sprintf("\"%v\"", v)
+		}
+
+		return fmt.Sprintf("%v", v)
 
 	default:
-		return fmt.Sprintf("\"%v\"", v)
+		return fmt.Sprintf("%v", v)
 	}
 }

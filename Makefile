@@ -3,9 +3,13 @@ TARGETS ?= darwin/amd64 linux/amd64
 GO ?= go
 TESTS := ./...
 TESTFLAGS :=
-LDFLAGS := -w -s
 GOFLAGS :=
 BINDIR := $(CURDIR)/bin
+
+COMMIT := $(shell git rev-parse HEAD)
+IMAGE_TAG:=$(shell ./docker/image-tag)
+
+LDFLAGS := -w -s -X main.Version=$(IMAGE_TAG) -X main.GitCommit="$(COMMIT)"
 
 SHELL=/usr/bin/env bash
 
@@ -44,3 +48,22 @@ test-unit:
 	@echo
 	@echo "==> Running unit tests <=="
 	$(GO) test $(GOFLAGS) ./pkg/codecommit
+
+.PHONY: build-docker
+build-docker:
+	@echo
+	@echo "==> Build Docker Image <=="
+	mkdir -p build
+	rm -rf build/docker
+	cp -a docker build/.
+	find . -maxdepth 1 ! -regex './build\|./docker\|\.' -print0 | xargs -0 -l1 -I{} cp -a {} build/docker/.
+	docker build \
+		-t docker.io/bashims/go-codecommit:$(IMAGE_TAG) \
+		--build-arg=GO_CODECOMMIT_VER=$(IMAGE_TAG) \
+		--build-arg=GO_CODECOMMIT_COMMIT="$(COMMIT)" \
+		build/docker/.
+.PHONY: push-docker
+push-docker:
+	@echo
+	@echo "==> Push Docker Image <=="
+	docker push docker.io/bashims/go-codecommit:$(IMAGE_TAG)
