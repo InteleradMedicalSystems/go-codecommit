@@ -3,7 +3,7 @@ TARGETS ?= darwin/amd64 linux/amd64
 GO ?= go
 TESTS := ./...
 TESTFLAGS :=
-GOFLAGS :=
+GOFLAGS := -mod=vendor
 BINDIR := $(CURDIR)/bin
 
 COMMIT := $(shell git rev-parse HEAD)
@@ -56,7 +56,7 @@ build-docker:
 	mkdir -p build
 	rm -rf build/docker
 	cp -a docker build/.
-	find . -maxdepth 1 ! -regex './build\|./docker\|\.' -print0 | xargs -0 -l1 -I{} cp -a {} build/docker/.
+	find . -maxdepth 1 ! -regex './build\|\.' -print0 | xargs -0 -l1 -I{} cp -a {} build/docker/.
 	docker build \
 		-t docker.io/bashims/go-codecommit:$(IMAGE_TAG) \
 		--build-arg=GO_CODECOMMIT_VER=$(IMAGE_TAG) \
