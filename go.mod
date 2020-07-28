@@ -3,7 +3,7 @@ module github.com/bashims/go-codecommit
 go 1.12
 
 require (
-	github.com/aws/aws-sdk-go v1.27.1
+	github.com/aws/aws-sdk-go v1.33.13
 	github.com/emirpasic/gods v1.12.0 // indirect
 	github.com/gruntwork-io/terratest v0.28.10
 	github.com/magiconair/properties v1.8.0
