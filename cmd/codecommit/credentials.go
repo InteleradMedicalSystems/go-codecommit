@@ -9,8 +9,9 @@ import (
 	"text/template"
 
 	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/bashims/go-codecommit/pkg/codecommit"
 	"github.com/spf13/cobra"
+
+	"github.com/bashims/go-codecommit/pkg/codecommit"
 )
 
 const (
@@ -68,8 +69,8 @@ func (c *CodeCommitCredentials) parseGitInput() GitRequest {
 	return r
 }
 
-func (c *CodeCommitCredentials) getCreds(url string) (*codecommit.CodeCommitCredentials, error) {
-	cloneURL, err := c.cloneURL(url)
+func (c *CodeCommitCredentials) getCreds(url string, roleArn *string) (*codecommit.CodeCommitCredentials, error) {
+	cloneURL, err := codecommit.NewCloneURL(roleArn, url)
 	if err != nil {
 		return nil, err
 	}
@@ -81,23 +82,8 @@ func (c *CodeCommitCredentials) getCreds(url string) (*codecommit.CodeCommitCred
 	return creds, nil
 }
 
-//cloneURL return a codecommit.cloneURL for url
-func (c *CodeCommitCredentials) cloneURL(url string) (*codecommit.CloneURL, error) {
-	sess, err := c.session()
-	if err != nil {
-		return nil, err
-	}
-
-	cloneURL, err := codecommit.NewCloneURL(sess, url)
-	if err != nil {
-		return nil, err
-	}
-	return cloneURL, nil
-
-}
-
-func (c *CodeCommitCredentials) emitCreds(url, format string) error {
-	creds, err := c.getCreds(url)
+func (c *CodeCommitCredentials) emitCreds(url, format string, roleArn *string) error {
+	creds, err := c.getCreds(url, roleArn)
 	if err != nil {
 		return err
 	}
@@ -112,18 +98,6 @@ func (c *CodeCommitCredentials) emitCreds(url, format string) error {
 		return err
 	}
 	return nil
-}
-
-//session getter/setter returns *session.session
-func (c *CodeCommitCredentials) session() (*session.Session, error) {
-	if c.sess == nil {
-		sess, err := session.NewSession()
-		if err != nil {
-			return nil, err
-		}
-		c.sess = sess
-	}
-	return c.sess, nil
 }
 
 func (c *CodeCommitCredentials) execute(cmd *cobra.Command, args []string) error {
@@ -145,12 +119,28 @@ func (c *CodeCommitCredentials) execute(cmd *cobra.Command, args []string) error
 		format = helperTemplate
 	}
 
-	return c.emitCreds(url, format)
+	roleArn, err := f.GetString("role-arn")
+	if err != nil {
+		return err
+	}
+	if roleArn == "" {
+		if r, isset := os.LookupEnv(envKeyCodeCommitRoleArn); isset {
+			roleArn = r
+		}
+	}
+
+	if roleArn == "" {
+		return c.emitCreds(url, format, nil)
+	}
+	return c.emitCreds(url, format, &roleArn)
 }
 
 func (c *CodeCommitCredentials) executeCredentialHelper(cmd *cobra.Command, args []string) error {
 	r := c.parseGitInput()
-	return c.emitCreds(r.url(), helperTemplate)
+	if roleArn, isset := os.LookupEnv(envKeyCodeCommitRoleArn); isset {
+		return c.emitCreds(r.url(), helperTemplate, &roleArn)
+	}
+	return c.emitCreds(r.url(), helperTemplate, nil)
 }
 
 func newCredentialsCmd() *cobra.Command {
@@ -177,6 +167,7 @@ codecommit credential --url https://git-codecommit.us-east-1.amazonaws.com/v1/re
 		fmt.Sprintf("emit credentials for URL\nCan be set from the environment with %s",
 			envKeyCodeCommitURL))
 	cmd.Flags().String("template", "", "template output (Go templating)")
+	cmd.Flags().String("role-arn", "", "role to assume when retrieving aws credentials, requires 'AWS_ACCESS_KEY_ID' and 'AWS_SECRET_KEY_ID' env vars to be set")
 	return cmd
 }
 

@@ -21,7 +21,11 @@ func TestRepoWrapperCloneEmpty(t *testing.T) {
 
 	repoWrapper := RepoWrapper{}
 	destDir := filepath.Join(repoRoot, "dest")
-	r, isEmpty, err := repoWrapper.Clone(repoRoot, destDir)
+	cloneUrl, err := NewCloneURL(nil, repoRoot)
+	if err != nil {
+		t.Fatalf("Failed to create clone url for repo %v, err=%v", repoRoot, err)
+	}
+	r, isEmpty, err := repoWrapper.Clone(cloneUrl, destDir)
 	if err != nil {
 		t.Fatalf("Failed cloning repo %v, err=%v, repo=%v", repoRoot, err, r)
 
@@ -61,10 +65,13 @@ func TestRepoWrapperClone(t *testing.T) {
 
 	repoWrapper := RepoWrapper{}
 	destDir := filepath.Join(repoRoot, "dest")
-	r, isEmpty, err := repoWrapper.Clone(repoRoot, destDir)
+	cloneUrl, err := NewCloneURL(nil, repoRoot)
+	if err != nil {
+		t.Fatalf("Failed to create clone url for repo %v, err=%v", repoRoot, err)
+	}
+	r, isEmpty, err := repoWrapper.Clone(cloneUrl, destDir)
 	if err != nil {
 		t.Fatalf("Failed cloning repo %v, err=%v, repo=%v", repoRoot, err, r)
-
 	}
 	if isEmpty {
 		t.Fatalf("Repo %v should not have been empty", repoRoot)

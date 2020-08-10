@@ -6,15 +6,14 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/bashims/go-codecommit/pkg/codecommit"
 	"github.com/spf13/cobra"
+
+	"github.com/bashims/go-codecommit/pkg/codecommit"
 )
 
 //GitCmd for commandline execution
 type GitCmd struct {
 	wrapper codecommit.RepoWrapper
-	sess    *session.Session
 }
 
 func (g *GitCmd) execute(cmd *cobra.Command, args []string) error {
@@ -69,17 +68,9 @@ func (g *GitCmd) clone(args []string) error {
 		url, args = args[0], args[1:]
 	}
 
-	if codecommit.IsCodeCommitURL(url) {
-		sess, err := g.session()
-		if err != nil {
-			return err
-		}
-		cloneURL, err := codecommit.NewCloneURL(sess, url)
-		if err != nil {
-			return err
-		}
-
-		url = cloneURL.String()
+	cloneURL, err := codecommit.NewCloneURL(nil, url)
+	if err != nil {
+		return err
 	}
 
 	var dest string
@@ -89,7 +80,7 @@ func (g *GitCmd) clone(args []string) error {
 		dest = g.wrapper.GetDestPath(url)
 	}
 
-	dest, err := filepath.Abs(dest)
+	dest, err = filepath.Abs(dest)
 	if err != nil {
 		return err
 	}
@@ -100,20 +91,8 @@ func (g *GitCmd) clone(args []string) error {
 	}
 
 	fmt.Printf("cloning %s to %s\n", url, dest)
-	_, _, err = g.wrapper.Clone(url, dest)
+	_, _, err = g.wrapper.Clone(cloneURL, dest)
 	return err
-}
-
-//session getter/setter returns *session.session
-func (g *GitCmd) session() (*session.Session, error) {
-	if g.sess == nil {
-		sess, err := session.NewSession()
-		if err != nil {
-			return nil, err
-		}
-		g.sess = sess
-	}
-	return g.sess, nil
 }
 
 func newCloneCmd() *cobra.Command {

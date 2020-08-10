@@ -10,8 +10,9 @@ import (
 var clobber bool
 
 const (
-	envKeyAwsProfile       = "AWS_PROFILE"
-	envKeyAwsSDKLoadConfig = "AWS_SDK_LOAD_CONFIG"
+	envKeyAwsProfile        = "AWS_PROFILE"
+	envKeyAwsSDKLoadConfig  = "AWS_SDK_LOAD_CONFIG"
+	envKeyCodeCommitRoleArn = "GO_CODECOMMIT_ROLE_ARN"
 )
 
 func setSDKLoadConfig() error {

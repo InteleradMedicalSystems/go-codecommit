@@ -43,10 +43,7 @@ type CloneURLTest struct {
 
 func (e *CloneURLTest) assertInvalidRegion() {
 	t := e.t
-	c := CloneURL{
-		RawURL: e.topts.uRL,
-	}
-	err := c.setURL()
+	c, err := NewCloneURL(nil, e.topts.uRL)
 	if err != nil {
 		t.Error(err)
 	}
@@ -59,10 +56,10 @@ func (e *CloneURLTest) assertInvalidRegion() {
 
 func (e *CloneURLTest) assertRegion() {
 	t := e.t
-	c := CloneURL{
-		RawURL: e.topts.uRL,
+	c, err := NewCloneURL(nil, e.topts.uRL)
+	if err != nil {
+		t.Error(err)
 	}
-	err := c.setURL()
 	if err != nil {
 		t.Error(err)
 	}

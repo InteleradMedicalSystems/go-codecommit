@@ -18,11 +18,11 @@ type RepoWrapper struct {
 }
 
 //Clone a Git repo, return true if the repo is up to date or was from an empty clone.
-func (r *RepoWrapper) Clone(cloneURL string, destDir string) (*git.Repository, bool, error) {
+func (r *RepoWrapper) Clone(cloneURL *CloneURL, destDir string) (*git.Repository, bool, error) {
 	log.Debugf("Cloning Git repo %s, dest %s", cloneURL, destDir)
 
 	cloneOpts := &git.CloneOptions{
-		URL: cloneURL,
+		URL: cloneURL.String(),
 	}
 
 	repo, err := git.PlainClone(destDir, false, cloneOpts)
