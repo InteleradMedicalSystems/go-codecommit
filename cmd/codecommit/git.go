@@ -20,7 +20,7 @@ type GitCmd struct {
 	wrapper codecommit.RepoWrapper
 	sess    *session.Session
 	region  *string
-	roleArn *string
+	roleARN *string
 }
 
 func (g *GitCmd) execute(cmd *cobra.Command, args []string) error {
@@ -76,15 +76,15 @@ func (g *GitCmd) clone(args []string, flags *pflag.FlagSet) error {
 	}
 
 	if codecommit.IsCodeCommitURL(url) {
-		roleArn, err := flags.GetString("role-arn")
+		roleARN, err := flags.GetString("role-arn")
 		if err != nil {
 			return err
 		}
-		if roleArn != "" && os.Getenv(envKeyAwsProfile) != "" {
+		if roleARN != "" && os.Getenv(envKeyAwsProfile) != "" {
 			return fmt.Errorf("only one of role arn or profile should be set")
 		}
-		if roleArn != "" {
-			g.roleArn = &roleArn
+		if roleARN != "" {
+			g.roleARN = &roleARN
 		}
 
 		region, err := codecommit.ParseRegion(url)
@@ -135,11 +135,8 @@ func (g *GitCmd) session() (*session.Session, error) {
 			return nil, err
 		}
 
-		if g.roleArn != nil {
-			if err := validateAssumeRoleConfig(); err != nil {
-				return nil, err
-			}
-			sess.Config.Credentials = stscreds.NewCredentials(sess, *g.roleArn)
+		if g.roleARN != nil {
+			sess.Config.Credentials = stscreds.NewCredentials(sess, *g.roleARN)
 		}
 		g.sess = sess
 	}
@@ -163,7 +160,7 @@ codecommit clone https://git-codecommit.us-east-1.amazonaws.com/v1/repos/your-re
 		Args: cobra.MaximumNArgs(2),
 	}
 
-	cmd.Flags().String("role-arn", os.Getenv(envKeyCodeCommitRoleArn), "role to assume when retrieving aws credentials, requires 'AWS_ACCESS_KEY_ID' and 'AWS_SECRET_KEY_ID' env vars to be set")
+	cmd.Flags().String("role-arn", os.Getenv(envKeyCodeCommitRoleARN), "role to assume when retrieving aws credentials, requires 'AWS_ACCESS_KEY_ID' and 'AWS_SECRET_KEY_ID' env vars to be set")
 	return cmd
 }
 

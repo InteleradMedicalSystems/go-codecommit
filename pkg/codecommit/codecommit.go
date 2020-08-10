@@ -126,7 +126,7 @@ func ParseRegion(host string) (string, error) {
 		return match[1], nil
 	}
 
-	return "", fmt.Errorf("invalid CodeCommit host %q", host)
+	return "", fmt.Errorf("invalid CodeCommit URL %q", host)
 }
 
 type CodeCommitCredentials struct {
