@@ -28,6 +28,19 @@ jobs:
       - run: curl -f --location https://releases.hashicorp.com/terraform/0.12.27/terraform_0.12.27_linux_amd64.zip -o /tmp/terraform.zip && unzip -o /tmp/terraform.zip -d $GOPATH/bin
       - run: make build
       - run: make test
+
+  publish:
+    branches:
+      only:
+        - master
+
+    docker:
+      - image: circleci/golang:1.14
+
+    working_directory: /go/src/github.com/bashims/go-codecommit
+
+    steps:
+      - checkout
       - run: |
           echo "$DOCKER_PASS" | docker login -u $DOCKER_USER --password-stdin
           make build-docker push-docker
