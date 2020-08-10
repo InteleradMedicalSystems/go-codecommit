@@ -8,14 +8,22 @@ import (
 	"regexp"
 	"text/template"
 
+	"github.com/aws/aws-sdk-go/aws"
+	stscreds "github.com/aws/aws-sdk-go/aws/credentials/stscreds"
 	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/bashims/go-codecommit/pkg/codecommit"
 	"github.com/spf13/cobra"
+
+	"github.com/bashims/go-codecommit/pkg/codecommit"
 )
 
 const (
 	envKeyCodeCommitURL = "CODECOMMIT_URL"
-	helperTemplate      = `username={{ .Credentials.Username }}
+
+	envKeyAwsAccessKeyID     = "AWS_ACCESS_KEY_ID"
+	envKeyAwsSecretAccessKey = "AWS_SECRET_ACCESS_KEY"
+	envKeyCodeCommitRoleArn  = "GO_CODECOMMIT_ROLE_ARN"
+
+	helperTemplate = `username={{ .Credentials.Username }}
 password={{ .Credentials.Password }}
 `
 	gitCredentialsHelperAPIDoc = "https://git-scm.com/docs/api-credentials#_credential_helpers"
@@ -44,8 +52,10 @@ type Values struct {
 }
 
 type CodeCommitCredentials struct {
-	sess   *session.Session
-	method string
+	sess    *session.Session
+	roleArn *string
+	region  *string
+	method  string
 }
 
 func (c *CodeCommitCredentials) parseGitInput() GitRequest {
@@ -117,13 +127,33 @@ func (c *CodeCommitCredentials) emitCreds(url, format string) error {
 //session getter/setter returns *session.session
 func (c *CodeCommitCredentials) session() (*session.Session, error) {
 	if c.sess == nil {
-		sess, err := session.NewSession()
+		cfg := &aws.Config{
+			Region: c.region,
+		}
+		sess, err := session.NewSession(cfg)
 		if err != nil {
 			return nil, err
+		}
+
+		if c.roleArn != nil {
+			if err := validateAssumeRoleConfig(); err != nil {
+				return nil, err
+			}
+			sess.Config.Credentials = stscreds.NewCredentials(sess, *c.roleArn)
 		}
 		c.sess = sess
 	}
 	return c.sess, nil
+}
+
+func validateAssumeRoleConfig() error {
+	if _, isset := os.LookupEnv(envKeyAwsAccessKeyID); !isset {
+		return fmt.Errorf("cannot assume role since the env var: '%s' must be set", envKeyAwsAccessKeyID)
+	}
+	if _, isset := os.LookupEnv(envKeyAwsSecretAccessKey); !isset {
+		return fmt.Errorf("cannot assume role since the env var: '%s' must be set", envKeyAwsSecretAccessKey)
+	}
+	return nil
 }
 
 func (c *CodeCommitCredentials) execute(cmd *cobra.Command, args []string) error {
@@ -145,11 +175,42 @@ func (c *CodeCommitCredentials) execute(cmd *cobra.Command, args []string) error
 		format = helperTemplate
 	}
 
+	roleArn, err := f.GetString("role-arn")
+	if err != nil {
+		return err
+	}
+	if roleArn == "" {
+		if r, isset := os.LookupEnv(envKeyCodeCommitRoleArn); isset {
+			roleArn = r
+		}
+	}
+	if roleArn != "" {
+		c.roleArn = &roleArn
+	}
+	region, err := codecommit.ParseRegion(url)
+	if err != nil {
+		return err
+	}
+	c.region = &region
+
 	return c.emitCreds(url, format)
 }
 
 func (c *CodeCommitCredentials) executeCredentialHelper(cmd *cobra.Command, args []string) error {
 	r := c.parseGitInput()
+
+	if codecommit.IsCodeCommitURL(r.url()) {
+		if r, isset := os.LookupEnv(envKeyCodeCommitRoleArn); isset {
+		    c.roleArn = &r
+	    }
+	
+		region, err := codecommit.ParseRegion(r.host)
+		if err != nil {
+			return err
+		}
+		c.region = &region
+	}
+
 	return c.emitCreds(r.url(), helperTemplate)
 }
 
@@ -177,6 +238,7 @@ codecommit credential --url https://git-codecommit.us-east-1.amazonaws.com/v1/re
 		fmt.Sprintf("emit credentials for URL\nCan be set from the environment with %s",
 			envKeyCodeCommitURL))
 	cmd.Flags().String("template", "", "template output (Go templating)")
+	cmd.Flags().String("role-arn", "", "role to assume when retrieving aws credentials, requires 'AWS_ACCESS_KEY_ID' and 'AWS_SECRET_KEY_ID' env vars to be set")
 	return cmd
 }
 

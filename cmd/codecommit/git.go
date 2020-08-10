@@ -6,21 +6,27 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/credentials/stscreds"
 	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/bashims/go-codecommit/pkg/codecommit"
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
+
+	"github.com/bashims/go-codecommit/pkg/codecommit"
 )
 
 //GitCmd for commandline execution
 type GitCmd struct {
 	wrapper codecommit.RepoWrapper
 	sess    *session.Session
+	region  *string
+	roleArn *string
 }
 
 func (g *GitCmd) execute(cmd *cobra.Command, args []string) error {
 	switch command := cmd.Name(); command {
 	case "clone":
-		return g.clone(args)
+		return g.clone(args, cmd.Flags())
 	case "pull":
 		return g.pull(args)
 	case "push":
@@ -60,7 +66,7 @@ func (g *GitCmd) push(args []string) error {
 	return err
 }
 
-func (g *GitCmd) clone(args []string) error {
+func (g *GitCmd) clone(args []string, flags *pflag.FlagSet) error {
 	url := os.Getenv(envKeyCodeCommitURL)
 	if url == "" {
 		if len(args) < 1 {
@@ -70,6 +76,22 @@ func (g *GitCmd) clone(args []string) error {
 	}
 
 	if codecommit.IsCodeCommitURL(url) {
+		roleArn, err := flags.GetString("role-arn")
+		if err != nil {
+			return err
+		}
+		if roleArn == "" {
+			if r, isset := os.LookupEnv(envKeyCodeCommitRoleArn); isset {
+				roleArn = r
+			}
+		}
+		if roleArn != "" {
+			g.roleArn = &roleArn
+		}
+
+		region, err := codecommit.ParseRegion(url)
+		g.region = &region
+
 		sess, err := g.session()
 		if err != nil {
 			return err
@@ -107,9 +129,19 @@ func (g *GitCmd) clone(args []string) error {
 //session getter/setter returns *session.session
 func (g *GitCmd) session() (*session.Session, error) {
 	if g.sess == nil {
-		sess, err := session.NewSession()
+		cfg := &aws.Config{
+			Region: g.region,
+		}
+		sess, err := session.NewSession(cfg)
 		if err != nil {
 			return nil, err
+		}
+
+		if g.roleArn != nil {
+			if err := validateAssumeRoleConfig(); err != nil {
+				return nil, err
+			}
+			sess.Config.Credentials = stscreds.NewCredentials(sess, *g.roleArn)
 		}
 		g.sess = sess
 	}
@@ -132,6 +164,8 @@ codecommit clone https://git-codecommit.us-east-1.amazonaws.com/v1/repos/your-re
 		RunE: c.execute,
 		Args: cobra.MaximumNArgs(2),
 	}
+
+	cmd.Flags().String("role-arn", "", "role to assume when retrieving aws credentials, requires 'AWS_ACCESS_KEY_ID' and 'AWS_SECRET_KEY_ID' env vars to be set")
 	return cmd
 }
 

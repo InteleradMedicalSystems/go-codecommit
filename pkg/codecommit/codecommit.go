@@ -30,17 +30,20 @@ func IsCodeCommitURL(url string) bool {
 
 //NewCloneURL return CloneURL object for CodeCommit
 func NewCloneURL(sess *session.Session, url string) (*CloneURL, error) {
-	var err error
-	if creds, err := sess.Config.Credentials.Get(); err == nil {
-		c := &CloneURL{
-			RawURL:     url,
-			CredValues: creds,
-		}
-		if err = c.setURL(); err == nil {
-			return c, nil
-		}
+	c := &CloneURL{
+		RawURL: url,
 	}
-	return nil, err
+	if err := c.setURL(); err != nil {
+		return nil, err
+	}
+
+	creds, err := sess.Config.Credentials.Get()
+	if err != nil {
+		return nil, err
+	}
+
+	c.CredValues = creds
+	return c, nil
 }
 
 type CloneURL struct {
@@ -114,12 +117,16 @@ func (c *CloneURL) parseRegion() (string, error) {
 		return "", fmt.Errorf("url is not set")
 
 	}
-	match := RegionRe.FindStringSubmatch(c.u.Host)
+	return ParseRegion(c.u.Host)
+}
+
+func ParseRegion(host string) (string, error) {
+	match := RegionRe.FindStringSubmatch(host)
 	if match != nil {
 		return match[1], nil
 	}
 
-	return "", fmt.Errorf("invalid CodeCommit URL %q", c.u.String())
+	return "", fmt.Errorf("invalid CodeCommit host %q", host)
 }
 
 type CodeCommitCredentials struct {
