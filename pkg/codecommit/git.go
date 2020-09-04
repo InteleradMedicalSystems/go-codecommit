@@ -87,6 +87,18 @@ func (r *RepoWrapper) PushR(repo *git.Repository) error {
 	}
 }
 
+//AddAll stages all the files within the provided dir for a commit
+func (r *RepoWrapper) AddAll(repo *git.Repository, dir string) error {
+	w, err := repo.Worktree()
+	if err != nil {
+		return err
+	}
+	if err := w.AddGlob(dir); err != nil {
+		return err
+	}
+	return nil
+}
+
 //Commit to a Git repo
 func (r *RepoWrapper) Commit(w *git.Worktree, name, email, message string, force bool) (*plumbing.Hash, error) {
 	status, err := w.Status()
