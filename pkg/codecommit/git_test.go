@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"gopkg.in/src-d/go-git.v4"
-	"gopkg.in/src-d/go-git.v4/plumbing/object"
+	"github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/plumbing/object"
 )
 
 // TestRepoWrapperCloneEmpty tests RepoWrapper.Clone() of an empty Git repo.
@@ -48,15 +48,12 @@ func TestRepoWrapperClone(t *testing.T) {
 
 	os.Chdir(repoRoot)
 
-	f, err := ioutil.TempFile(repoRoot, "")
-	if err != nil {
-		t.Fatalf("%v", err)
-	}
-
-	baseFile := filepath.Base(f.Name())
 	contentExpected := []byte("foo\n")
-	f.Write(contentExpected)
-	gitAdd(t, baseFile)
+	baseFile, err := createFile(repoRoot, contentExpected)
+	if err != nil {
+		t.Fatalf("Failed to create a temp file, err=%v", err)
+	}
+	gitAdd(t, *baseFile)
 	gitCommit(t, "commit it")
 
 	repoWrapper := RepoWrapper{}
@@ -70,7 +67,7 @@ func TestRepoWrapperClone(t *testing.T) {
 		t.Fatalf("Repo %v should not have been empty", repoRoot)
 	}
 
-	filename := filepath.Join(destDir, baseFile)
+	filename := filepath.Join(destDir, *baseFile)
 	_, err = os.Stat(filename)
 	if err != nil {
 		t.Fatalf("Expected file %v was not cloned, err=%v", filename, err)
@@ -95,15 +92,13 @@ func TestRepoWrapperCommit(t *testing.T) {
 
 	os.Chdir(repoRoot)
 
-	f, err := ioutil.TempFile(repoRoot, "")
+	contentExpected := []byte("foo\n")
+	baseFile, err := createFile(repoRoot, contentExpected)
 	if err != nil {
-		t.Fatalf("%v", err)
+		t.Fatalf("Failed to create a temp file, err=%v", err)
 	}
 
-	baseFile := filepath.Base(f.Name())
-	contentExpected := []byte("foo\n")
-	f.Write(contentExpected)
-	gitAdd(t, baseFile)
+	gitAdd(t, *baseFile)
 
 	repoWrapper := RepoWrapper{}
 	repo, err := repoWrapper.repo(repoRoot)
@@ -159,14 +154,13 @@ func TestRepoWrapperPush(t *testing.T) {
 
 	os.Chdir(cloneDir)
 
-	f, err := ioutil.TempFile(cloneDir, "")
-	if err != nil {
-		t.Fatalf("%v", err)
-	}
-	baseFile := filepath.Base(f.Name())
 	contentExpected := []byte("foo\n")
-	f.Write(contentExpected)
-	gitAdd(t, baseFile)
+	baseFile, err := createFile(cloneDir, contentExpected)
+	if err != nil {
+		t.Fatalf("Failed to create a temp file, err=%v", err)
+	}
+
+	gitAdd(t, *baseFile)
 	gitCommit(t, "commit it")
 
 	repoWrapper := RepoWrapper{}
@@ -181,7 +175,118 @@ func TestRepoWrapperPush(t *testing.T) {
 
 	otherDir := filepath.Join(tempdir, "other")
 	gitClone(t, repoRoot, otherDir)
-	assertFileContents(t, filepath.Join(otherDir, baseFile), contentExpected)
+	assertFileContents(t, filepath.Join(otherDir, *baseFile), contentExpected)
+}
+
+func TestRepoWrapper_AddAll(t *testing.T) {
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("%v", err)
+	}
+
+	defer os.Chdir(cwd)
+
+	tempdir := tempDir(t, "TestRepoWrapper-")
+	defer os.RemoveAll(tempdir)
+
+	repoRoot := filepath.Join(tempdir, "repo")
+	gitInit(t, repoRoot)
+
+	unstagedFile, err := createFile(repoRoot, []byte("hey"))
+	if err != nil {
+		t.Fatalf("failed to create a file: %v", err)
+	}
+
+	addAllPath, err := ioutil.TempDir(repoRoot, "")
+	if err != nil {
+		t.Fatalf("failed to create a repo directory, err=%v", err)
+	}
+
+	stagedFile1, err := createFile(addAllPath, []byte("hey"))
+	if err != nil {
+		t.Fatalf("failed to create a file: %v", err)
+	}
+
+	stagedFile2, err := createFile(addAllPath, []byte("I'm a file"))
+	if err != nil {
+		t.Fatalf("failed to create a file: %v", err)
+	}
+
+	wrapper := &RepoWrapper{}
+	repo, err := wrapper.repo(repoRoot)
+	if err != nil {
+		t.Fatalf("Failed to open a repo, err=%v", err)
+	}
+
+	repoDir, err := filepath.Rel(repoRoot, addAllPath)
+	if err != nil {
+		t.Fatalf("Failed to get the relative path, err=%v", err)
+	}
+	if err := wrapper.AddAll(repo, repoDir); err != nil {
+		t.Fatalf("failed to add the files to the repo, err=%v", err)
+	}
+
+	w, err := repo.Worktree()
+	if err != nil {
+		t.Fatalf("Failed to get the working tree, err=%v", err)
+	}
+
+	status, err := w.Status()
+	if err != nil {
+		t.Fatalf("Failed to get the working tree sttus, err=%v", err)
+	}
+
+	var stagedFiles []string
+	var untrackedFiles []string
+
+	for file, stat := range status {
+		switch stat.Staging {
+		case git.Added:
+			stagedFiles = append(stagedFiles, file)
+		case git.Untracked:
+			untrackedFiles = append(untrackedFiles, file)
+		default:
+			t.Fatal("there should only be added and untracked files")
+		}
+	}
+
+	if len(stagedFiles) != 2 {
+		t.Fatal("There should have been 2 staged files")
+	}
+
+	for _, stagedFile := range stagedFiles {
+		match := false
+		for _, expectedStagedFile := range []string{*stagedFile1, *stagedFile2} {
+			if filepath.Join(repoDir, expectedStagedFile) == stagedFile {
+				match = true
+				break
+			}
+		}
+		if !match {
+			t.Fatalf("Found unexpected staged file: %s", stagedFile)
+		}
+	}
+
+	if len(untrackedFiles) != 1 {
+		t.Fatal("There should have been only 1 untracked file")
+	}
+	if untrackedFiles[0] != *unstagedFile {
+		t.Fatalf("found unexpected untracked file %s", untrackedFiles[0])
+	}
+}
+
+func createFile(dir string, contentExpected []byte) (*string, error) {
+	f, err := ioutil.TempFile(dir, "")
+	if err != nil {
+		return nil, err
+	}
+	baseFile := filepath.Base(f.Name())
+
+	if _, err := f.Write(contentExpected); err != nil {
+		return nil, err
+	}
+
+	return &baseFile, nil
 }
 
 func assertFileContents(t *testing.T, filename string, expected []byte) {

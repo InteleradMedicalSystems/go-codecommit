@@ -6,11 +6,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/plumbing"
+	"github.com/go-git/go-git/v5/plumbing/object"
+	"github.com/go-git/go-git/v5/plumbing/transport"
 	log "github.com/sirupsen/logrus"
-	"gopkg.in/src-d/go-git.v4"
-	"gopkg.in/src-d/go-git.v4/plumbing"
-	"gopkg.in/src-d/go-git.v4/plumbing/object"
-	"gopkg.in/src-d/go-git.v4/plumbing/transport"
 )
 
 //RepoWrapper wraps basic go-git comands
@@ -85,6 +85,18 @@ func (r *RepoWrapper) PushR(repo *git.Repository) error {
 	default:
 		return err
 	}
+}
+
+//AddAll stages all the files within the provided dir for a commit
+func (r *RepoWrapper) AddAll(repo *git.Repository, dir string) error {
+	w, err := repo.Worktree()
+	if err != nil {
+		return err
+	}
+	if err := w.AddGlob(dir); err != nil {
+		return err
+	}
+	return nil
 }
 
 //Commit to a Git repo
