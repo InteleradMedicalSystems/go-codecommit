@@ -13,7 +13,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/spf13/cobra"
 
-	"github.com/bashims/go-codecommit/pkg/codecommit"
+	"github.com/InteleradMedicalSystems/go-codecommit/pkg/codecommit"
 )
 
 const (

@@ -12,7 +12,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 
-	"github.com/bashims/go-codecommit/pkg/codecommit"
+	"github.com/InteleradMedicalSystems/go-codecommit/pkg/codecommit"
 )
 
 //GitCmd for commandline execution

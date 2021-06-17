@@ -1,8 +1,4 @@
-TARGETS ?= darwin/amd64 linux/amd64
-
-GO ?= go
-TESTS := ./...
-TESTFLAGS :=
+GO := go
 GOFLAGS := -mod=vendor
 BINDIR := $(CURDIR)/bin
 
@@ -32,16 +28,14 @@ build-cross:
 	CGO_ENABLED=0 gox -parallel=3 -output="build/_dist/{{.OS}}-{{.Arch}}/{{.Dir}}" -osarch='$(TARGETS)' $(GOFLAGS) $(if $(TAGS),-tags '$(TAGS)',) -ldflags '$(LDFLAGS)' ./cmd/codecommit
 
 .PHONY: test
-test: build
 test: TESTFLAGS += -race -v -timeout 20m
-test: test-unit
-test: test-e2e
+test: build test-unit test-e2e
 
 .PHONY: test-e2e
 test-e2e:
 	@echo
-	@echo "==> Running e2e tests <=="
-	$(GO) test $(GOFLAGS) $(TESTFLAGS) ./tests
+	@echo "==> Running e2e tests DISABLED <=="
+	#$(GO) test $(GOFLAGS) $(TESTFLAGS) ./tests
 
 .PHONY: test-unit
 test-unit:
@@ -52,18 +46,18 @@ test-unit:
 .PHONY: build-docker
 build-docker:
 	@echo
-	@echo "==> Build Docker Image <=="
-	mkdir -p build
-	rm -rf build/docker
-	cp -a docker build/.
-	find . -maxdepth 1 ! -regex './build\|\.' -print0 | xargs -0 -l1 -I{} cp -a {} build/docker/.
-	docker build \
-		-t docker.io/bashims/go-codecommit:$(IMAGE_TAG) \
-		--build-arg=GO_CODECOMMIT_VER=$(IMAGE_TAG) \
-		--build-arg=GO_CODECOMMIT_COMMIT="$(COMMIT)" \
-		build/docker/.
+	@echo "==> Build Docker Image DISABLED <=="
+	#mkdir -p build
+	#rm -rf build/docker
+	#cp -a docker build/.
+	#find . -maxdepth 1 ! -regex './build\|\.' -print0 | xargs -0 -l1 -I{} cp -a {} build/docker/.
+	#docker build \
+	#	-t docker.io/bashims/go-codecommit:$(IMAGE_TAG) \
+	#	--build-arg=GO_CODECOMMIT_VER=$(IMAGE_TAG) \
+	#	--build-arg=GO_CODECOMMIT_COMMIT="$(COMMIT)" \
+	#	build/docker/.
 .PHONY: push-docker
 push-docker:
 	@echo
-	@echo "==> Push Docker Image <=="
-	docker push docker.io/bashims/go-codecommit:$(IMAGE_TAG)
+	@echo "==> Push Docker Image DISABLED <=="
+	#docker push docker.io/bashims/go-codecommit:$(IMAGE_TAG)

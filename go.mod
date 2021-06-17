@@ -1,4 +1,4 @@
-module github.com/bashims/go-codecommit
+module github.com/InteleradMedicalSystems/go-codecommit
 
 go 1.12
 
