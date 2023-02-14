@@ -3,7 +3,7 @@ module github.com/InteleradMedicalSystems/go-codecommit
 go 1.12
 
 require (
-	github.com/aws/aws-sdk-go v1.33.13
+	github.com/aws/aws-sdk-go v1.34.0
 	github.com/go-git/go-git/v5 v5.1.0
 	github.com/gruntwork-io/terratest v0.28.10
 	github.com/magiconair/properties v1.8.0
